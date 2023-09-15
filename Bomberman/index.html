@@ -24,6 +24,9 @@
         var ctx = canvas.getContext('2d');
         var dir = 0, speed = 2;
         let pause = false;
+        let bombLimit = 2; // Límite de bombas
+        let bombs = [];
+
 
         class Cuadrado {
             constructor(x, y, w, h, c) {
@@ -109,8 +112,39 @@
             }
         }
 
+        class Bomba {
+            constructor(x, y, w, h, color, fuseTime) {
+                this.x = x;
+                this.y = y;
+                this.w = w;
+                this.h = h;
+                this.color = color;
+                this.active = true; // Bomba activa
+                this.fuseTime = fuseTime; // Tiempo en milisegundos antes de la explosión
+                this.startTime = Date.now(); // Registrar el momento en que se creó la bomba
+            }
+
+            draw(ctx) {
+                if (this.active) {
+                    ctx.fillStyle = this.color;
+                    ctx.fillRect(this.x, this.y, this.w, this.h);
+                }
+            }
+
+            explode() {
+                
+                const tiempoActual = Date.now();
+                if (tiempoActual - this.startTime >= this.fuseTime) {
+                    
+                    this.active = false;
+                    
+                }
+            }
+        }
+
         const player = new Player(0, 0, 40, 40, "black");
         let walls = [];
+        
 
         //limites
         walls.push(new Cuadrado(-10, -10, 1000, 10, "gray"))
@@ -186,6 +220,7 @@
         walls.push(new Cuadrado(850, 550, 50, 50, "gray"))
 
 
+
         window.requestAnimationFrame = (function () {
             return window.requestAnimationFrame ||
                 window.webkitRequestAnimationFrame ||
@@ -210,6 +245,11 @@
                     case 65:
                         dir = 4;
                         break;
+                    case 69: // Tecla "E" para crear una bomba
+                        if (bombs.length < bombLimit) {
+                            bombs.push(new Bomba(player.x, player.y, 20, 20, "red", 1000)); // Bomba con 3000 milisegundos de mecha
+                        }
+                        break;
                 }
             }
         });
@@ -222,12 +262,30 @@
             if (!pause) {
                 player.update();
             }
+            updateBombs(); // Actualizar estado de las bombas
             paint();
             window.requestAnimationFrame(update);
         }
 
+        function updateBombs() {
+            // Actualizar el estado de las bombas
+            for (let i = 0; i < bombs.length; i++) {
+                bombs[i].explode(); // Verificar si la bomba debe explotar
+                if (!bombs[i].active) {
+                    // Si la bomba no está activa (explotó o desapareció), quitarla de la lista de bombas
+                    bombs.splice(i, 1);
+                    i--; // Disminuir el índice para evitar problemas de iteración
+                }
+            }
+        }
+
         function paint() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Dibuja las bombas
+            for (let i = 0; i < bombs.length; i++) {
+                bombs[i].draw(ctx);
+            }
 
             player.draw();
 
@@ -245,7 +303,8 @@
             }
         }
 
-        update();
+        update(); // Iniciar el bucle del juego
+
     </script>
 </body>
 
