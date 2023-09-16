@@ -26,7 +26,7 @@
         let pause = false;
         let bombLimit = 2; // Límite de bombas
         let bombs = [];
-
+        let explosionSquares = []; // Cuadrados en el área de explosión
 
         class Cuadrado {
             constructor(x, y, w, h, c) {
@@ -35,6 +35,7 @@
                 this.w = w;
                 this.h = h;
                 this.c = c;
+                this.startTime = Date.now();
             }
 
             paint(ctx) {
@@ -113,15 +114,16 @@
         }
 
         class Bomba {
-            constructor(x, y, w, h, color, fuseTime) {
+            constructor(x, y, w, h, color, fuseTime, explosionRadius) {
                 this.x = x;
                 this.y = y;
                 this.w = w;
                 this.h = h;
                 this.color = color;
-                this.active = true; // Bomba activa
+                this.active = false; // Bomba no activa al inicio
                 this.fuseTime = fuseTime; // Tiempo en milisegundos antes de la explosión
-                this.startTime = Date.now(); // Registrar el momento en que se creó la bomba
+                this.startTime = 0; // Inicializamos startTime en 0
+                this.explosionRadius = explosionRadius; // Radio del área de explosión
             }
 
             draw(ctx) {
@@ -131,28 +133,83 @@
                 }
             }
 
+            arm() {
+                // Armamos la bomba y establecemos el startTime
+                this.active = true;
+                this.startTime = Date.now();
+            }
+
             explode() {
-                
+                // Verificar si la bomba está activa y ha pasado el tiempo de mecha
                 const tiempoActual = Date.now();
-                if (tiempoActual - this.startTime >= this.fuseTime) {
-                    
+                if (this.active && tiempoActual - this.startTime >= this.fuseTime) {
+                    // La bomba ha explotado (ha alcanzado el tiempo de mecha)
                     this.active = false;
-                    
+
+                    // Detectar objetos en el área de explosión y aplicar efectos
+                    for (let i = 0; i < walls.length; i++) {
+                        const wall = walls[i];
+                        const centerX = this.x + this.w / 2;
+                        const centerY = this.y + this.h / 2;
+                        const distance = Math.sqrt(Math.pow(centerX - (wall.x + wall.w / 2), 2) +
+                            Math.pow(centerY - (wall.y + wall.h / 2), 2));
+
+                        // Verificar si el objeto está dentro del radio de explosión y no es una pared
+                        if (distance <= this.explosionRadius) {
+                            if (wall instanceof BreakableCuadrado && !wall.isBroken) {
+                                wall.break();
+                            }
+                        }
+                    }
+
+                    // Generar cuadrados en el área de explosión
+                    generateExplosionSquares(this.x, this.y, this.explosionRadius);
+                }
+            }
+        }
+
+        class BreakableCuadrado extends Cuadrado {
+            constructor(x, y, w, h, c) {
+                super(x, y, w, h, c);
+                this.isBroken = false;
+            }
+
+            break() {
+                this.isBroken = true;
+                // Eliminar cuadro roto de la lista de paredes
+                const index = walls.indexOf(this);
+                if (index !== -1) {
+                    walls.splice(index, 1);
+                }
+            }
+
+            paint(ctx) {
+                if (!this.isBroken) {
+                    ctx.fillStyle = this.c;
+                    ctx.fillRect(this.x, this.y, this.w, this.h);
+                }
+            }
+        }
+
+        function generateExplosionSquares(x, y, radius) {
+            // Genera cuadrados en el área de explosión
+            for (let i = x - radius; i <= x + radius; i += 20) {
+                for (let j = y - radius; j <= y + radius; j += 20) {
+                    explosionSquares.push(new Cuadrado(i, j, 20, 20, "orange"));
                 }
             }
         }
 
         const player = new Player(0, 0, 40, 40, "black");
         let walls = [];
-        
 
-        //limites
+        // Limites
         walls.push(new Cuadrado(-10, -10, 1000, 10, "gray"))
         walls.push(new Cuadrado(950, -10, 30, 700, "gray"))
         walls.push(new Cuadrado(-10, -10, 10, 700, "gray"))
         walls.push(new Cuadrado(0, 650, 1000, 10, "gray"))
 
-        //mapa prmera fila de muros
+        // Mapa primera fila de muros
         walls.push(new Cuadrado(50, 50, 50, 50, "gray"))
         walls.push(new Cuadrado(150, 50, 50, 50, "gray"))
         walls.push(new Cuadrado(250, 50, 50, 50, "gray"))
@@ -163,8 +220,7 @@
         walls.push(new Cuadrado(750, 50, 50, 50, "gray"))
         walls.push(new Cuadrado(850, 50, 50, 50, "gray"))
 
-
-        //segunda fila
+        // Segunda fila
         walls.push(new Cuadrado(50, 150, 50, 50, "gray"))
         walls.push(new Cuadrado(150, 150, 50, 50, "gray"))
         walls.push(new Cuadrado(250, 150, 50, 50, "gray"))
@@ -175,7 +231,7 @@
         walls.push(new Cuadrado(750, 150, 50, 50, "gray"))
         walls.push(new Cuadrado(850, 150, 50, 50, "gray"))
 
-        //tercera fila
+        // Tercera fila
         walls.push(new Cuadrado(50, 250, 50, 50, "gray"))
         walls.push(new Cuadrado(150, 250, 50, 50, "gray"))
         walls.push(new Cuadrado(250, 250, 50, 50, "gray"))
@@ -186,7 +242,7 @@
         walls.push(new Cuadrado(750, 250, 50, 50, "gray"))
         walls.push(new Cuadrado(850, 250, 50, 50, "gray"))
 
-        //cuarta fila
+        // Cuarta fila
         walls.push(new Cuadrado(50, 350, 50, 50, "gray"))
         walls.push(new Cuadrado(150, 350, 50, 50, "gray"))
         walls.push(new Cuadrado(250, 350, 50, 50, "gray"))
@@ -197,7 +253,7 @@
         walls.push(new Cuadrado(750, 350, 50, 50, "gray"))
         walls.push(new Cuadrado(850, 350, 50, 50, "gray"))
 
-        //quinta fila
+        // Quinta fila
         walls.push(new Cuadrado(50, 450, 50, 50, "gray"))
         walls.push(new Cuadrado(150, 450, 50, 50, "gray"))
         walls.push(new Cuadrado(250, 450, 50, 50, "gray"))
@@ -208,7 +264,7 @@
         walls.push(new Cuadrado(750, 450, 50, 50, "gray"))
         walls.push(new Cuadrado(850, 450, 50, 50, "gray"))
 
-        //sexta fila
+        // Sexta fila
         walls.push(new Cuadrado(50, 550, 50, 50, "gray"))
         walls.push(new Cuadrado(150, 550, 50, 50, "gray"))
         walls.push(new Cuadrado(250, 550, 50, 50, "gray"))
@@ -219,7 +275,8 @@
         walls.push(new Cuadrado(750, 550, 50, 50, "gray"))
         walls.push(new Cuadrado(850, 550, 50, 50, "gray"))
 
-
+        const breakableWall = new BreakableCuadrado(100, 100, 50, 50, "blue");
+        walls.push(breakableWall);
 
         window.requestAnimationFrame = (function () {
             return window.requestAnimationFrame ||
@@ -230,6 +287,7 @@
                 };
         }());
 
+        
         document.addEventListener("keydown", (e) => {
             if (!pause) {
                 switch (e.keyCode) {
@@ -247,7 +305,9 @@
                         break;
                     case 69: // Tecla "E" para crear una bomba
                         if (bombs.length < bombLimit) {
-                            bombs.push(new Bomba(player.x, player.y, 20, 20, "red", 1000)); // Bomba con 3000 milisegundos de mecha
+                            const newBomba = new Bomba(player.x, player.y, 40, 40, "red", 1000, 50); // Bomba con 1000 milisegundos de mecha (1 segundo) y radio de explosión de 50
+                            bombs.push(newBomba);
+                            newBomba.arm(); // Armamos la bomba con un retardo
                         }
                         break;
                 }
@@ -261,20 +321,40 @@
         function update() {
             if (!pause) {
                 player.update();
+
+                // Verificar colisión del jugador con explosiones
+                for (let i = 0; i < explosionSquares.length; i++) {
+                    if (player.seToca(explosionSquares[i])) {
+                        pause = true;
+                        break;
+                    }
+                }
             }
-            updateBombs(); // Actualizar estado de las bombas
+            updateBombs();
+            updateExplosionSquares();
             paint();
             window.requestAnimationFrame(update);
         }
 
+        function updateExplosionSquares() {
+            for (let i = 0; i < explosionSquares.length; i++) {
+                const maxLifetime = 1000;
+                const currentTime = Date.now();
+                const lifetime = currentTime - explosionSquares[i].startTime;
+
+                if (lifetime >= maxLifetime) {
+                    explosionSquares.splice(i, 1);
+                    i--;
+                }
+            }
+        }
+
         function updateBombs() {
-            // Actualizar el estado de las bombas
             for (let i = 0; i < bombs.length; i++) {
-                bombs[i].explode(); // Verificar si la bomba debe explotar
+                bombs[i].explode();
                 if (!bombs[i].active) {
-                    // Si la bomba no está activa (explotó o desapareció), quitarla de la lista de bombas
                     bombs.splice(i, 1);
-                    i--; // Disminuir el índice para evitar problemas de iteración
+                    i--;
                 }
             }
         }
@@ -282,9 +362,12 @@
         function paint() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Dibuja las bombas
             for (let i = 0; i < bombs.length; i++) {
                 bombs[i].draw(ctx);
+            }
+
+            for (let i = 0; i < explosionSquares.length; i++) {
+                explosionSquares[i].paint(ctx);
             }
 
             player.draw();
@@ -294,18 +377,20 @@
             }
 
             if (pause) {
-                ctx.fillStyle = "rgba(154,160,154,0.5)";
+                ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
                 ctx.font = "40px Georgia";
-                ctx.fillStyle = "black";
-                ctx.fillText("P A U S E", 185, 225);
+                ctx.fillStyle = "white";
+                ctx.fillText("Game Over", canvas.width / 2 - 70, canvas.height / 2);
             }
         }
 
-        update(); // Iniciar el bucle del juego
+        update();
 
     </script>
 </body>
 
 </html>
+
+
