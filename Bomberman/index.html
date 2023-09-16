@@ -19,6 +19,8 @@
         <canvas width="950" height="650" id="myCanvas"></canvas>
     </center>
 
+
+
     <script>
         var canvas = document.getElementById('myCanvas');
         var ctx = canvas.getContext('2d');
@@ -27,6 +29,15 @@
         let bombLimit = 2; // Límite de bombas
         let bombs = [];
         let explosionSquares = []; // Cuadrados en el área de explosión
+        let Explosion = new Audio();
+        let fondo = new Audio();
+
+        Explosion.src = "Explosion.mp3";
+        fondo.src = "sonido2.mp3";
+
+        
+
+        
 
         class Cuadrado {
             constructor(x, y, w, h, c) {
@@ -134,7 +145,6 @@
             }
 
             arm() {
-                // Armamos la bomba y establecemos el startTime
                 this.active = true;
                 this.startTime = Date.now();
             }
@@ -145,6 +155,8 @@
                 if (this.active && tiempoActual - this.startTime >= this.fuseTime) {
                     // La bomba ha explotado (ha alcanzado el tiempo de mecha)
                     this.active = false;
+
+                    Explosion.play();
 
                     // Generar cuadrados en el área de explosión
                     generateExplosionSquares(this.x + this.w / 2, this.y + this.h / 2, this.explosionRadius);
@@ -189,15 +201,15 @@
                             j >= wall.y && j <= wall.y + wall.h
                         ) {
                             if (wall instanceof BreakableCuadrado && !wall.isBroken) {
-                                insideBlueSquare = true; // Cuadro azul no roto
+                                insideBlueSquare = true;
                             } else if (wall.c === "gray") {
-                                insideGraySquare = true; // Cuadro gris
+                                insideGraySquare = true;
                             }
                             break;
                         }
                     }
 
-                    // Solo agregar un cuadro de explosión si no está dentro de un cuadro gris
+                    
                     if (!insideGraySquare) {
                         // Si está dentro de un cuadro azul no roto, romperlo
                         if (insideBlueSquare) {
@@ -217,6 +229,8 @@
                 }
             }
         }
+
+
 
         const player = new Player(0, 0, 40, 40, "black");
         let walls = [];
@@ -523,6 +537,7 @@
                 };
         }());
 
+
         document.addEventListener("keydown", (e) => {
             if (!pause) {
                 switch (e.keyCode) {
@@ -538,11 +553,11 @@
                     case 65:
                         dir = 4;
                         break;
-                    case 69: // Tecla "E" para crear una bomba
+                    case 32: // Tecla "Espacio" para crear una bomba
                         if (bombs.length < bombLimit) {
-                            const newBomba = new Bomba(player.x, player.y, 20, 20, "red", 1000, 50); // Bomba con 1000 milisegundos de mecha (1 segundo) y radio de explosión de 50
+                            const newBomba = new Bomba(player.x, player.y, 20, 20, "red", 1000, 50); // Bomba con 1000 milisegundos de mecha 
                             bombs.push(newBomba);
-                            newBomba.arm(); // Armamos la bomba con un retardo
+                            newBomba.arm(); 
                         }
                         break;
                 }
@@ -553,23 +568,39 @@
             dir = 0;
         });
 
-        function update() {
-            if (!pause) {
-                player.update();
 
-                // Verificar colisión del jugador con explosiones
-                for (let i = 0; i < explosionSquares.length; i++) {
-                    if (player.seToca(explosionSquares[i])) {
-                        pause = true;
-                        break;
-                    }
-                }
+        function update() {
+    if (!pause) {
+        player.update();
+
+        // Verificar colisión del jugador con explosiones
+        for (let i = 0; i < explosionSquares.length; i++) {
+            if (player.seToca(explosionSquares[i])) {
+                pause = true;
+                break;
             }
-            updateBombs();
-            updateExplosionSquares();
-            paint();
-            window.requestAnimationFrame(update);
         }
+
+        // Verificar si no quedan cuadros azules en la lista de walls
+        let allBlueSquaresBroken = true;
+        for (let i = 0; i < walls.length; i++) {
+            if (walls[i] instanceof BreakableCuadrado && !walls[i].isBroken && walls[i].c === "blue") {
+                allBlueSquaresBroken = false;
+                break;
+            }
+        }
+
+        if (allBlueSquaresBroken) {
+            pause = true;
+            alert("¡Has roto todos los cuadros azules! ¡Ganaste!");
+        }
+    }
+    fondo.play();
+    updateBombs();
+    updateExplosionSquares();
+    paint();
+    window.requestAnimationFrame(update);
+}
 
         function updateExplosionSquares() {
             for (let i = 0; i < explosionSquares.length; i++) {
