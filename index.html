@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <style>
+        canvas {
+            background-color: white;
+        }
+
+        body {
+            background-color: black;
+        }
+    </style>
+</head>
+
+<body>
+
+    <center>
+        <canvas width="950" height="650" id="myCanvas"></canvas>
+    </center>
+
+
+
+    <script>
+        var canvas = document.getElementById('myCanvas');
+        var ctx = canvas.getContext('2d');
+        var dir = 0, speed = 2;
+        let pause = false;
+        let bombLimit = 2; // Límite de bombas
+        let bombs = [];
+        let explosionSquares = []; // Cuadrados en el área de explosión
+        let Explosion = new Audio();
+        let fondo = new Audio();
+
+        Explosion.src = "Explosion.mp3";
+        fondo.src = "sonido2.mp3";
+
+        
+
+        
+
+        class Cuadrado {
+            constructor(x, y, w, h, c) {
+                this.x = x;
+                this.y = y;
+                this.w = w;
+                this.h = h;
+                this.c = c;
+                this.startTime = Date.now();
+            }
+
+            paint(ctx) {
+                ctx.fillStyle = this.c;
+                ctx.fillRect(this.x, this.y, this.w, this.h);
+            }
+
+            seTocan(otro) {
+                return this.x < otro.x + otro.w &&
+                    this.x + this.w > otro.x &&
+                    this.y < otro.y + otro.h &&
+                    this.y + this.h > otro.y;
+            }
+        }
+
+        class Player {
+            constructor(x, y, width, height, color) {
+                this.x = x;
+                this.y = y;
+                this.width = width;
+                this.height = height;
+                this.color = color;
+            }
+
+            update() {
+                let prevX = this.x;
+                let prevY = this.y;
+
+                switch (dir) {
+                    case 1:
+                        this.y -= speed;
+                        if (this.y < 0) {
+                            this.y = canvas.height;
+                        }
+                        break;
+                    case 2:
+                        this.y += speed;
+                        if (this.y > canvas.height) {
+                            this.y = -this.height;
+                        }
+                        break;
+                    case 3:
+                        this.x += speed;
+                        if (this.x > canvas.width) {
+                            this.x = -this.width;
+                        }
+                        break;
+                    case 4:
+                        this.x -= speed;
+                        if (this.x < -this.width) {
+                            this.x = canvas.width;
+                        }
+                        break;
+                }
+
+                for (var i = 0; i < walls.length; i++) {
+                    if (this.seToca(walls[i])) {
+                        this.x = prevX;
+                        this.y = prevY;
+                        break;
+                    }
+                }
+            }
+
+            seToca(wall) {
+                return this.x < wall.x + wall.w &&
+                    this.x + this.width > wall.x &&
+                    this.y < wall.y + wall.h &&
+                    this.y + this.height > wall.y;
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+            }
+        }
+
+        class Bomba {
+            constructor(x, y, w, h, color, fuseTime, explosionRadius) {
+                this.x = x;
+                this.y = y;
+                this.w = w;
+                this.h = h;
+                this.color = color;
+                this.active = false; // Bomba no activa al inicio
+                this.fuseTime = fuseTime; // Tiempo en milisegundos antes de la explosión
+                this.startTime = 0; // Inicializamos startTime en 0
+                this.explosionRadius = explosionRadius; // Radio del área de explosión
+            }
+
+            draw(ctx) {
+                if (this.active) {
+                    ctx.fillStyle = this.color;
+                    ctx.fillRect(this.x, this.y, this.w, this.h);
+                }
+            }
+
+            arm() {
+                this.active = true;
+                this.startTime = Date.now();
+            }
+
+            explode() {
+                // Verificar si la bomba está activa y ha pasado el tiempo de mecha
+                const tiempoActual = Date.now();
+                if (this.active && tiempoActual - this.startTime >= this.fuseTime) {
+                    // La bomba ha explotado (ha alcanzado el tiempo de mecha)
+                    this.active = false;
+
+                    Explosion.play();
+
+                    // Generar cuadrados en el área de explosión
+                    generateExplosionSquares(this.x + this.w / 2, this.y + this.h / 2, this.explosionRadius);
+                }
+            }
+        }
+
+        class BreakableCuadrado extends Cuadrado {
+            constructor(x, y, w, h, c) {
+                super(x, y, w, h, c);
+                this.isBroken = false;
+            }
+
+            break() {
+                this.isBroken = true;
+                // Eliminar cuadro roto de la lista de paredes
+                const index = walls.indexOf(this);
+                if (index !== -1) {
+                    walls.splice(index, 1);
+                }
+            }
+
+            paint(ctx) {
+                if (!this.isBroken) {
+                    ctx.fillStyle = this.c;
+                    ctx.fillRect(this.x, this.y, this.w, this.h);
+                }
+            }
+        }
+
+        function generateExplosionSquares(x, y, radius) {
+            for (let i = x - radius; i <= x + radius; i += 20) {
+                for (let j = y - radius; j <= y + radius; j += 20) {
+                    let insideGraySquare = false;
+                    let insideBlueSquare = false;
+
+                    // Verificar si el punto (i, j) está dentro de algún cuadro gris o azul
+                    for (let k = 0; k < walls.length; k++) {
+                        const wall = walls[k];
+                        if (
+                            i >= wall.x && i <= wall.x + wall.w &&
+                            j >= wall.y && j <= wall.y + wall.h
+                        ) {
+                            if (wall instanceof BreakableCuadrado && !wall.isBroken) {
+                                insideBlueSquare = true;
+                            } else if (wall.c === "gray") {
+                                insideGraySquare = true;
+                            }
+                            break;
+                        }
+                    }
+
+                    
+                    if (!insideGraySquare) {
+                        // Si está dentro de un cuadro azul no roto, romperlo
+                        if (insideBlueSquare) {
+                            for (let k = 0; k < walls.length; k++) {
+                                const wall = walls[k];
+                                if (
+                                    i >= wall.x && i <= wall.x + wall.w &&
+                                    j >= wall.y && j <= wall.y + wall.h &&
+                                    wall instanceof BreakableCuadrado && !wall.isBroken
+                                ) {
+                                    wall.break(); // Romper cuadro azul no roto
+                                }
+                            }
+                        }
+                        explosionSquares.push(new Cuadrado(i, j, 20, 20, "orange"));
+                    }
+                }
+            }
+        }
+
+
+
+        const player = new Player(0, 0, 40, 40, "black");
+        let walls = [];
+
+        // Limites
+        walls.push(new Cuadrado(-10, -10, 1000, 10, "gray"))
+        walls.push(new Cuadrado(950, -10, 30, 700, "gray"))
+        walls.push(new Cuadrado(-10, -10, 10, 700, "gray"))
+        walls.push(new Cuadrado(0, 650, 1000, 10, "gray"))
+
+        // Mapa primera fila de muros
+        walls.push(new Cuadrado(50, 50, 50, 50, "gray"))
+        walls.push(new Cuadrado(150, 50, 50, 50, "gray"))
+        walls.push(new Cuadrado(250, 50, 50, 50, "gray"))
+        walls.push(new Cuadrado(350, 50, 50, 50, "gray"))
+        walls.push(new Cuadrado(450, 50, 50, 50, "gray"))
+        walls.push(new Cuadrado(550, 50, 50, 50, "gray"))
+        walls.push(new Cuadrado(650, 50, 50, 50, "gray"))
+        walls.push(new Cuadrado(750, 50, 50, 50, "gray"))
+        walls.push(new Cuadrado(850, 50, 50, 50, "gray"))
+
+        // Segunda fila
+        walls.push(new Cuadrado(50, 150, 50, 50, "gray"))
+        walls.push(new Cuadrado(150, 150, 50, 50, "gray"))
+        walls.push(new Cuadrado(250, 150, 50, 50, "gray"))
+        walls.push(new Cuadrado(350, 150, 50, 50, "gray"))
+        walls.push(new Cuadrado(450, 150, 50, 50, "gray"))
+        walls.push(new Cuadrado(550, 150, 50, 50, "gray"))
+        walls.push(new Cuadrado(650, 150, 50, 50, "gray"))
+        walls.push(new Cuadrado(750, 150, 50, 50, "gray"))
+        walls.push(new Cuadrado(850, 150, 50, 50, "gray"))
+
+        // Tercera fila
+        walls.push(new Cuadrado(50, 250, 50, 50, "gray"))
+        walls.push(new Cuadrado(150, 250, 50, 50, "gray"))
+        walls.push(new Cuadrado(250, 250, 50, 50, "gray"))
+        walls.push(new Cuadrado(350, 250, 50, 50, "gray"))
+        walls.push(new Cuadrado(450, 250, 50, 50, "gray"))
+        walls.push(new Cuadrado(550, 250, 50, 50, "gray"))
+        walls.push(new Cuadrado(650, 250, 50, 50, "gray"))
+        walls.push(new Cuadrado(750, 250, 50, 50, "gray"))
+        walls.push(new Cuadrado(850, 250, 50, 50, "gray"))
+
+        // Cuarta fila
+        walls.push(new Cuadrado(50, 350, 50, 50, "gray"))
+        walls.push(new Cuadrado(150, 350, 50, 50, "gray"))
+        walls.push(new Cuadrado(250, 350, 50, 50, "gray"))
+        walls.push(new Cuadrado(350, 350, 50, 50, "gray"))
+        walls.push(new Cuadrado(450, 350, 50, 50, "gray"))
+        walls.push(new Cuadrado(550, 350, 50, 50, "gray"))
+        walls.push(new Cuadrado(650, 350, 50, 50, "gray"))
+        walls.push(new Cuadrado(750, 350, 50, 50, "gray"))
+        walls.push(new Cuadrado(850, 350, 50, 50, "gray"))
+
+        // Quinta fila
+        walls.push(new Cuadrado(50, 450, 50, 50, "gray"))
+        walls.push(new Cuadrado(150, 450, 50, 50, "gray"))
+        walls.push(new Cuadrado(250, 450, 50, 50, "gray"))
+        walls.push(new Cuadrado(350, 450, 50, 50, "gray"))
+        walls.push(new Cuadrado(450, 450, 50, 50, "gray"))
+        walls.push(new Cuadrado(550, 450, 50, 50, "gray"))
+        walls.push(new Cuadrado(650, 450, 50, 50, "gray"))
+        walls.push(new Cuadrado(750, 450, 50, 50, "gray"))
+        walls.push(new Cuadrado(850, 450, 50, 50, "gray"))
+
+        // Sexta fila
+        walls.push(new Cuadrado(50, 550, 50, 50, "gray"))
+        walls.push(new Cuadrado(150, 550, 50, 50, "gray"))
+        walls.push(new Cuadrado(250, 550, 50, 50, "gray"))
+        walls.push(new Cuadrado(350, 550, 50, 50, "gray"))
+        walls.push(new Cuadrado(450, 550, 50, 50, "gray"))
+        walls.push(new Cuadrado(550, 550, 50, 50, "gray"))
+        walls.push(new Cuadrado(650, 550, 50, 50, "gray"))
+        walls.push(new Cuadrado(750, 550, 50, 50, "gray"))
+        walls.push(new Cuadrado(850, 550, 50, 50, "gray"))
+
+
+        //bloque rompibles
+
+
+        const breakableWall2 = new BreakableCuadrado(0, 50, 50, 50, "blue");
+        walls.push(breakableWall2);
+        const breakableWall3 = new BreakableCuadrado(0, 150, 50, 50, "blue");
+        walls.push(breakableWall3);
+        const breakableWall4 = new BreakableCuadrado(0, 200, 50, 50, "blue");
+        walls.push(breakableWall4);
+        const breakableWall5 = new BreakableCuadrado(0, 250, 50, 50, "blue");
+        walls.push(breakableWall5);
+        const breakableWall6 = new BreakableCuadrado(0, 350, 50, 50, "blue");
+        walls.push(breakableWall6);
+        const breakableWall7 = new BreakableCuadrado(0, 350, 50, 50, "blue");
+        walls.push(breakableWall7);
+        const breakableWall8 = new BreakableCuadrado(0, 450, 50, 50, "blue");
+        walls.push(breakableWall8);
+        const breakableWall9 = new BreakableCuadrado(0, 500, 50, 50, "blue");
+        walls.push(breakableWall9);
+        const breakableWall10 = new BreakableCuadrado(0, 550, 50, 50, "blue");
+        walls.push(breakableWall10);
+
+        const breakableWall11 = new BreakableCuadrado(100, 50, 50, 50, "blue");
+        walls.push(breakableWall11);
+        const breakableWall12 = new BreakableCuadrado(100, 100, 50, 50, "blue");
+        walls.push(breakableWall12);
+        const breakableWall13 = new BreakableCuadrado(100, 150, 50, 50, "blue");
+        walls.push(breakableWall13);
+        const breakableWall14 = new BreakableCuadrado(100, 300, 50, 50, "blue");
+        walls.push(breakableWall14);
+        const breakableWall15 = new BreakableCuadrado(100, 350, 50, 50, "blue");
+        walls.push(breakableWall15);
+        const breakableWall16 = new BreakableCuadrado(100, 450, 50, 50, "blue");
+        walls.push(breakableWall16);
+        const breakableWall17 = new BreakableCuadrado(100, 500, 50, 50, "blue");
+        walls.push(breakableWall17);
+        const breakableWall18 = new BreakableCuadrado(100, 550, 50, 50, "blue");
+        walls.push(breakableWall18);
+        const breakableWall19 = new BreakableCuadrado(100, 600, 50, 50, "blue");
+        walls.push(breakableWall19);
+
+        const breakableWall = new BreakableCuadrado(150, 0, 50, 50, "blue");
+        walls.push(breakableWall);
+        const breakableWall20 = new BreakableCuadrado(150, 100, 50, 50, "blue");
+        walls.push(breakableWall20);
+        const breakableWall21 = new BreakableCuadrado(150, 200, 50, 50, "blue");
+        walls.push(breakableWall21);
+        const breakableWall22 = new BreakableCuadrado(150, 400, 50, 50, "blue");
+        walls.push(breakableWall22);
+        const breakableWall23 = new BreakableCuadrado(150, 600, 50, 50, "blue");
+        walls.push(breakableWall23);
+
+        const breakableWall24 = new BreakableCuadrado(200, 0, 50, 50, "blue");
+        walls.push(breakableWall24);
+        const breakableWall25 = new BreakableCuadrado(200, 50, 50, 50, "blue");
+        walls.push(breakableWall25);
+        const breakableWall26 = new BreakableCuadrado(200, 100, 50, 50, "blue");
+        walls.push(breakableWall26);
+        const breakableWall27 = new BreakableCuadrado(200, 200, 50, 50, "blue");
+        walls.push(breakableWall27);
+        const breakableWall28 = new BreakableCuadrado(200, 300, 50, 50, "blue");
+        walls.push(breakableWall28);
+        const breakableWall29 = new BreakableCuadrado(200, 350, 50, 50, "blue");
+        walls.push(breakableWall29);
+        const breakableWall30 = new BreakableCuadrado(200, 400, 50, 50, "blue");
+        walls.push(breakableWall30);
+        const breakableWall31 = new BreakableCuadrado(200, 550, 50, 50, "blue");
+        walls.push(breakableWall31);
+
+        const breakableWall32 = new BreakableCuadrado(250, 200, 50, 50, "blue");
+        walls.push(breakableWall32);    
+        const breakableWall33 = new BreakableCuadrado(250, 500, 50, 50, "blue");
+        walls.push(breakableWall33);
+
+        const breakableWall34 = new BreakableCuadrado(300, 50, 50, 50, "blue");
+        walls.push(breakableWall34);
+        const breakableWall35 = new BreakableCuadrado(300, 150, 50, 50, "blue");
+        walls.push(breakableWall35);
+        const breakableWall36 = new BreakableCuadrado(300, 450, 50, 50, "blue");
+        walls.push(breakableWall36);
+        const breakableWall37 = new BreakableCuadrado(300, 500, 50, 50, "blue");
+        walls.push(breakableWall37);
+        const breakableWall38 = new BreakableCuadrado(300, 600, 50, 50, "blue");
+        walls.push(breakableWall38);
+
+        const breakableWall39 = new BreakableCuadrado(350, 0, 50, 50, "blue");
+        walls.push(breakableWall39);
+        const breakableWall40 = new BreakableCuadrado(350, 100, 50, 50, "blue");
+        walls.push(breakableWall40);
+        const breakableWall41 = new BreakableCuadrado(350, 300, 50, 50, "blue");
+        walls.push(breakableWall41);
+        const breakableWall42 = new BreakableCuadrado(350, 600, 50, 50, "blue");
+        walls.push(breakableWall42);
+
+        const breakableWall43 = new BreakableCuadrado(400, 0, 50, 50, "blue");
+        walls.push(breakableWall43);
+        const breakableWall44 = new BreakableCuadrado(400, 50, 50, 50, "blue");
+        walls.push(breakableWall44);
+        const breakableWall45 = new BreakableCuadrado(400, 200, 50, 50, "blue");
+        walls.push(breakableWall45);
+        const breakableWall46 = new BreakableCuadrado(400, 350, 50, 50, "blue");
+        walls.push(breakableWall46);
+        const breakableWall47 = new BreakableCuadrado(400, 400, 50, 50, "blue");
+        walls.push(breakableWall47);
+        const breakableWall48 = new BreakableCuadrado(400, 450, 50, 50, "blue");
+        walls.push(breakableWall48);
+        const breakableWall49 = new BreakableCuadrado(400, 550, 50, 50, "blue");
+        walls.push(breakableWall49);
+        const breakableWall50 = new BreakableCuadrado(400, 600, 50, 50, "blue");
+        walls.push(breakableWall50);
+
+        const breakableWall51 = new BreakableCuadrado(650, 0, 50, 50, "blue");
+        walls.push(breakableWall51);
+        const breakableWall52 = new BreakableCuadrado(500, 50, 50, 50, "blue");
+        walls.push(breakableWall52);
+        const breakableWall53 = new BreakableCuadrado(500, 150, 50, 50, "blue");
+        walls.push(breakableWall53);
+        const breakableWall54 = new BreakableCuadrado(500, 200, 50, 50, "blue");
+        walls.push(breakableWall54);
+        const breakableWall55 = new BreakableCuadrado(500, 250, 50, 50, "blue");
+        walls.push(breakableWall55);
+        const breakableWall56 = new BreakableCuadrado(500, 350, 50, 50, "blue");
+        walls.push(breakableWall56);
+        const breakableWall57 = new BreakableCuadrado(500, 350, 50, 50, "blue");
+        walls.push(breakableWall57);
+        const breakableWall58 = new BreakableCuadrado(500, 450, 50, 50, "blue");
+        walls.push(breakableWall58);
+        const breakableWall59 = new BreakableCuadrado(500, 500, 50, 50, "blue");
+        walls.push(breakableWall59);
+        const breakableWall60 = new BreakableCuadrado(500, 550, 50, 50, "blue");
+        walls.push(breakableWall60);
+
+        const breakableWall61 = new BreakableCuadrado(600, 50, 50, 50, "blue");
+        walls.push(breakableWall61);
+        const breakableWall62 = new BreakableCuadrado(600, 100, 50, 50, "blue");
+        walls.push(breakableWall62);
+        const breakableWall63 = new BreakableCuadrado(600, 150, 50, 50, "blue");
+        walls.push(breakableWall63);
+        const breakableWall64 = new BreakableCuadrado(600, 300, 50, 50, "blue");
+        walls.push(breakableWall64);
+        const breakableWall65 = new BreakableCuadrado(600, 350, 50, 50, "blue");
+        walls.push(breakableWall65);
+        const breakableWall66 = new BreakableCuadrado(600, 450, 50, 50, "blue");
+        walls.push(breakableWall66);
+        const breakableWall67 = new BreakableCuadrado(600, 500, 50, 50, "blue");
+        walls.push(breakableWall67);
+        const breakableWall68 = new BreakableCuadrado(600, 550, 50, 50, "blue");
+        walls.push(breakableWall68);
+        const breakableWall69 = new BreakableCuadrado(600, 600, 50, 50, "blue");
+        walls.push(breakableWall69);
+        
+
+        const breakableWall70 = new BreakableCuadrado(650, 100, 50, 50, "blue");
+        walls.push(breakableWall70);
+        const breakableWall71 = new BreakableCuadrado(650, 200, 50, 50, "blue");
+        walls.push(breakableWall71);
+        const breakableWall72 = new BreakableCuadrado(650, 400, 50, 50, "blue");
+        walls.push(breakableWall72);
+        const breakableWall73 = new BreakableCuadrado(650, 600, 50, 50, "blue");
+        walls.push(breakableWall73);
+
+        const breakableWall74 = new BreakableCuadrado(700, 0, 50, 50, "blue");
+        walls.push(breakableWall74);
+        const breakableWall75 = new BreakableCuadrado(700, 50, 50, 50, "blue");
+        walls.push(breakableWall75);
+        const breakableWall76 = new BreakableCuadrado(700, 100, 50, 50, "blue");
+        walls.push(breakableWall76);
+        const breakableWall77 = new BreakableCuadrado(700, 200, 50, 50, "blue");
+        walls.push(breakableWall77);
+        const breakableWall78 = new BreakableCuadrado(700, 300, 50, 50, "blue");
+        walls.push(breakableWall78);
+        const breakableWall79 = new BreakableCuadrado(700, 350, 50, 50, "blue");
+        walls.push(breakableWall79);
+        const breakableWall80 = new BreakableCuadrado(700, 400, 50, 50, "blue");
+        walls.push(breakableWall80);
+        const breakableWall81 = new BreakableCuadrado(700, 550, 50, 50, "blue");
+        walls.push(breakableWall81);
+
+        const breakableWall82 = new BreakableCuadrado(750, 200, 50, 50, "blue");
+        walls.push(breakableWall82);    
+        const breakableWall83 = new BreakableCuadrado(750, 500, 50, 50, "blue");
+        walls.push(breakableWall83);
+
+        const breakableWall84 = new BreakableCuadrado(800, 50, 50, 50, "blue");
+        walls.push(breakableWall84);
+        const breakableWall85 = new BreakableCuadrado(800, 150, 50, 50, "blue");
+        walls.push(breakableWall85);
+        const breakableWall86 = new BreakableCuadrado(800, 450, 50, 50, "blue");
+        walls.push(breakableWall86);
+        const breakableWall87 = new BreakableCuadrado(800, 500, 50, 50, "blue");
+        walls.push(breakableWall87);
+        const breakableWall88 = new BreakableCuadrado(800, 600, 50, 50, "blue");
+        walls.push(breakableWall88);
+
+        const breakableWall89 = new BreakableCuadrado(850, 0, 50, 50, "blue");
+        walls.push(breakableWall89);
+        const breakableWall90 = new BreakableCuadrado(850, 100, 50, 50, "blue");
+        walls.push(breakableWall90);
+        const breakableWall91 = new BreakableCuadrado(850, 300, 50, 50, "blue");
+        walls.push(breakableWall91);
+        const breakableWall92 = new BreakableCuadrado(850, 600, 50, 50, "blue");
+        walls.push(breakableWall92);
+        
+        const breakableWall93 = new BreakableCuadrado(900, 0, 50, 50, "blue");
+        walls.push(breakableWall93);
+        const breakableWall94 = new BreakableCuadrado(900, 50, 50, 50, "blue");
+        walls.push(breakableWall94);
+        const breakableWall95 = new BreakableCuadrado(900, 200, 50, 50, "blue");
+        walls.push(breakableWall95);
+        const breakableWall96 = new BreakableCuadrado(900, 350, 50, 50, "blue");
+        walls.push(breakableWall96);
+        const breakableWall97 = new BreakableCuadrado(900, 400, 50, 50, "blue");
+        walls.push(breakableWall97);
+        const breakableWall98 = new BreakableCuadrado(900, 450, 50, 50, "blue");
+        walls.push(breakableWall98);
+        const breakableWall99 = new BreakableCuadrado(900, 550, 50, 50, "blue");
+        walls.push(breakableWall99);
+        const breakableWall100 = new BreakableCuadrado(900, 600, 50, 50, "blue");
+        walls.push(breakableWall100);
+
+        window.requestAnimationFrame = (function () {
+            return window.requestAnimationFrame ||
+                window.webkitRequestAnimationFrame ||
+                window.mozRequestAnimationFrame ||
+                function (callback) {
+                    window.setTimeout(callback, 17);
+                };
+        }());
+
+
+        document.addEventListener("keydown", (e) => {
+            if (!pause) {
+                switch (e.keyCode) {
+                    case 87:
+                        dir = 1;
+                        break;
+                    case 83:
+                        dir = 2;
+                        break;
+                    case 68:
+                        dir = 3;
+                        break;
+                    case 65:
+                        dir = 4;
+                        break;
+                    case 32: // Tecla "Espacio" para crear una bomba
+                        if (bombs.length < bombLimit) {
+                            const newBomba = new Bomba(player.x, player.y, 20, 20, "red", 1000, 50); // Bomba con 1000 milisegundos de mecha 
+                            bombs.push(newBomba);
+                            newBomba.arm(); 
+                        }
+                        break;
+                }
+            }
+        });
+
+        document.addEventListener("keyup", (e) => {
+            dir = 0;
+        });
+
+
+        function update() {
+    if (!pause) {
+        player.update();
+
+        // Verificar colisión del jugador con explosiones
+        for (let i = 0; i < explosionSquares.length; i++) {
+            if (player.seToca(explosionSquares[i])) {
+                pause = true;
+                break;
+            }
+        }
+
+        // Verificar si no quedan cuadros azules en la lista de walls
+        let allBlueSquaresBroken = true;
+        for (let i = 0; i < walls.length; i++) {
+            if (walls[i] instanceof BreakableCuadrado && !walls[i].isBroken && walls[i].c === "blue") {
+                allBlueSquaresBroken = false;
+                break;
+            }
+        }
+
+        if (allBlueSquaresBroken) {
+            pause = true;
+            alert("¡Has roto todos los cuadros azules! ¡Ganaste!");
+        }
+    }
+    fondo.play();
+    updateBombs();
+    updateExplosionSquares();
+    paint();
+    window.requestAnimationFrame(update);
+}
+
+        function updateExplosionSquares() {
+            for (let i = 0; i < explosionSquares.length; i++) {
+                const maxLifetime = 1000;
+                const currentTime = Date.now();
+                const lifetime = currentTime - explosionSquares[i].startTime;
+
+                if (lifetime >= maxLifetime) {
+                    explosionSquares.splice(i, 1);
+                    i--;
+                }
+            }
+        }
+
+        function updateBombs() {
+            for (let i = 0; i < bombs.length; i++) {
+                bombs[i].explode();
+                if (!bombs[i].active) {
+                    bombs.splice(i, 1);
+                    i--;
+                }
+            }
+        }
+
+        function paint() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            for (let i = 0; i < bombs.length; i++) {
+                bombs[i].draw(ctx);
+            }
+
+            for (let i = 0; i < explosionSquares.length; i++) {
+                explosionSquares[i].paint(ctx);
+            }
+
+            player.draw();
+
+            for (var i = 0; i < walls.length; i++) {
+                walls[i].paint(ctx);
+            }
+
+            if (pause) {
+                ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                ctx.font = "40px Georgia";
+                ctx.fillStyle = "white";
+                ctx.fillText("Game Over", canvas.width / 2 - 70, canvas.height / 2);
+            }
+        }
+
+        update();
+
+    </script>
+</body>
+
+</html>
